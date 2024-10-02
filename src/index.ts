@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import inquirer from "inquirer";
 import chalk from "chalk";
-import https from "https"; // Node.js built-in module for making HTTP requests
 
 // Initialize the CLI program
 const program = new Command();
@@ -57,60 +56,61 @@ async function promptForUsername() {
   ]);
 
   // Fetch data from GitHub API after validating the username
-  fetchUserEvents(answer.username);
+  await fetchUserEvents(answer.username);
 }
 
-// Function to fetch recent GitHub user events
-function fetchUserEvents(username: string) {
-  const options = {
-    hostname: "api.github.com",
-    path: `/users/${username}/events`,
-    method: "GET",
-    headers: { "User-Agent": "node.js" }, // GitHub API requires User-Agent header
-  };
+// Function to fetch recent GitHub user events using fetch()
+async function fetchUserEvents(username: string) {
+  const url = `https://api.github.com/users/${username}/events`;
 
-  https
-    .get(options, (res) => {
-      let data = "";
-
-      // Accumulate the chunks of data received
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-
-      // Once the response has ended, parse and display the recent activity
-      res.on("end", () => {
-        try {
-          const events = JSON.parse(data);
-
-          // Handle the case where no events are returned
-          if (!Array.isArray(events) || events.length === 0) {
-            console.log(chalk.red("No recent activity found for this user."));
-            return;
-          }
-
-          // Display the 3 most recent events
-          console.log(chalk.green(`Recent activity for user: ${username}`));
-          events.slice(0, 3).forEach((event, index) => {
-            console.log(`\nActivity ${index + 1}:`);
-            console.log(`  Type: ${chalk.blue(event.type)}`);
-            console.log(`  Repo: ${chalk.blue(event.repo.name)}`);
-            console.log(
-              `  Date: ${chalk.blue(
-                new Date(event.created_at).toLocaleString()
-              )}`
-            );
-          });
-        } catch (error) {
-          console.log(
-            chalk.red("Error parsing the response. Please try again.")
-          );
-        }
-      });
-    })
-    .on("error", (err) => {
-      console.log(chalk.red(`Error fetching data: ${err.message}`));
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "node.js", // GitHub API requires User-Agent header
+      },
     });
+
+    if (!response.ok) {
+      console.log(
+        chalk.red(
+          "Failed to fetch data. Please check the username or try again later."
+        )
+      );
+      return;
+    }
+
+    const events = await response.json();
+
+    // Handle the case where no events are returned
+    if (!Array.isArray(events) || events.length === 0) {
+      console.log(chalk.red("No recent activity found for this user."));
+      return;
+    }
+
+    // Display the 3 most recent events with better formatting
+    console.log(
+      chalk.green(`\nRecent activity for GitHub user: ${chalk.bold(username)}`)
+    );
+    console.log(chalk.green("--------------------------------------------"));
+
+    events.slice(0, 3).forEach((event, index) => {
+      console.log(chalk.cyan.bold(`\nActivity #${index + 1}`));
+      console.log(
+        chalk.yellow("Event Type:") + ` ${chalk.white.bold(event.type)}`
+      );
+      console.log(
+        chalk.yellow("Repository:") + ` ${chalk.white.bold(event.repo.name)}`
+      );
+      console.log(
+        chalk.yellow("Date:") +
+          ` ${chalk.white.bold(new Date(event.created_at).toLocaleString())}`
+      );
+      console.log(chalk.green("--------------------------------------------"));
+    });
+    console.log(chalk.yellow(`and ${events.length - 3} more activities...`));
+  } catch (error: any) {
+    console.log(chalk.red(`Error fetching data: ${error.message}`));
+  }
 }
 
 // Define the CLI command that triggers the prompt
